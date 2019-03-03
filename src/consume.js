@@ -3,17 +3,12 @@ const request = require('request-promise');
 const { join } = require('path');
 const Promise = require('bluebird');
 const { red, green } = require('chalk');
+const { inputPath, outputPath, appDirectory } = require('./paths');
 
 function getInputParams () {
 	try {
-		const appName = process.argv[2];
-		const appConfig = require(join(
-			__dirname,
-			'../configs',
-			`${appName}.json`
-		));
-		const appFileName = `${appConfig.appName}.json`;
-		return { appConfig, appFileName };
+		const appConfig = require(inputPath);
+		return appConfig;
 	} catch (err) {
 		console.log('ERROR getting input params: ', err.message);
 	}
@@ -28,7 +23,7 @@ function makeRequest (options) {
 		}
 	});
 }
-async function doConsume ({ appConfig, appFileName }) {
+async function doConsume (appConfig) {
 	try {
 		const dataToWrite = await Promise.reduce(
 			appConfig.routes,
@@ -56,12 +51,15 @@ async function doConsume ({ appConfig, appFileName }) {
 			},
 			{}
 		);
-		fs.writeFileSync(
-			join(__dirname, '../apps', appFileName),
+		const outFolder = join(appDirectory, 'mockdata');
+		if (!fs.existsSync(outFolder)) {
+			fs.mkdir(outFolder);
+		}
+		fs.writeFileSync(outputPath,
 			JSON.stringify(dataToWrite),
 			{ encoding: 'utf8' }
 		);
-		console.log(`\nWrote ${green(appFileName)}`);
+		console.log(`\n${green('Successfully Wrote mock data')}`);
 		process.exit(0);
 	} catch (err) {
 		console.log(red(err.message));
