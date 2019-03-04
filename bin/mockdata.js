@@ -3,17 +3,19 @@
 
 const spawn = require('cross-spawn');
 const { error } = require('../src/helpers');
-const script = process.argv[2];
-const startServer = process.argv[3];
+const args = require('minimist')(process.argv.slice(2));
+const script = args._[0];
+const startServer = args.s;
+const port = args.p || 3001;
 
-if (startServer) {
+if (script === 'consume') {
+	spawn.sync('node', [require.resolve('../src/consume')], { stdio: 'inherit' });
+} else if (script === 'serve') {
 	// start the base server
 	const [command, ...args] = startServer.split(' ');
 	spawn(command, args, { stdio: 'inherit' });
-}
-
-if (script === 'consume' || script === 'serve') {
-	spawn.sync('node', [require.resolve(`../src/${script}`)], { stdio: 'inherit' });
+	// start the mock server
+	spawn.sync('node', [require.resolve('../src/serve'), port], { stdio: 'inherit' });
 } else {
 	error('Script wrong or undefined: must be "consume" or "serve"');
 }
