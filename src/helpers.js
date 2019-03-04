@@ -3,10 +3,12 @@ const { inputPath } = require('./paths');
 const { red, green } = require('chalk');
 const appConfig = require(inputPath);
 
+const paramWhitelist = ['middleware']; // properties that do not have to be present in config
+
 function getConfig (...configKeys) {
 	const config = pick(appConfig, ...configKeys);
 	for (const key of configKeys) {
-		if (!config[key]) {
+		if (!config[key] && !paramWhitelist.includes(key)) {
 			return error(`Missing value from config: ${key}`);
 		}
 	}

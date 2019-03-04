@@ -7,8 +7,8 @@ const { outputPath, appDirectory } = require('./paths');
 const express = require('express');
 const agent = require('supertest');
 
-const { routes, apiRouter, apiBase } = getConfig('routes', 'apiRouter', 'apiBase');
-const expressApp = express().use(apiBase, apiRouter);
+const { routes, apiRouter, apiBase, middleware = [] } = getConfig('routes', 'apiRouter', 'apiBase', 'middleware');
+const expressApp = express().use(apiBase, [...middleware, apiRouter]);
 
 function makeRequest ({ url, headers }) {
 	const urlPath = `${apiBase}/${url}`;
@@ -61,7 +61,7 @@ async function doConsume () {
 			},
 			{}
 		);
-		if (!Object.keys(dataToWrite)) {
+		if (!Object.keys(dataToWrite).length) {
 			throw new Error('Nothing to write!');
 		}
 		const outFolder = join(appDirectory, 'mockdata');
