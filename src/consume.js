@@ -1,37 +1,42 @@
 const fs = require('fs');
-const request = require('request-promise');
 const { join } = require('path');
 const Promise = require('bluebird');
 const { red, green } = require('chalk');
-const { inputPath, outputPath, appDirectory } = require('./paths');
+const { getConfig, error, success } = require('./helpers');
+const { outputPath, appDirectory } = require('./paths');
+const express = require('express');
+const agent = require('supertest');
 
-function getInputParams () {
-	try {
-		const appConfig = require(inputPath);
-		return appConfig;
-	} catch (err) {
-		console.log('ERROR getting input params: ', err.message);
-	}
-}
-function makeRequest (options) {
-	return request(options, (error, response) => {
-		const msg = `Fetch from ${options.url}`;
-		if (!error && response.statusCode === 200) {
-			console.log(`${msg}: ${green('SUCCESS')}`);
-		} else {
-			console.log(`${msg}: ${red('FAILED')}`);
-		}
+const { routes, apiRouter, apiBase } = getConfig('routes', 'apiRouter', 'apiBase');
+const expressApp = express().use(apiBase, apiRouter);
+
+function makeRequest ({ url, headers }) {
+	const urlPath = `${apiBase}/${url}`;
+	return new Promise((resolve, reject) => {
+		agent(expressApp)
+			.get(urlPath)
+			.set(headers)
+			.end((err, res) => {
+				const msg = `Fetch from ${urlPath}`;
+				if (!err && res.status === 200) {
+					console.log(`${msg}: ${green('SUCCESS')}`);
+					resolve(res.body);
+				} else {
+					console.log(`${msg}: ${red('FAILED')}`);
+					reject(new Error(`Could not find path: ${urlPath}`));
+				}
+			});
 	});
 }
-async function doConsume (appConfig) {
+async function doConsume () {
 	try {
 		const dataToWrite = await Promise.reduce(
-			appConfig.routes,
+			routes,
 			async (ac, route) => {
 				let fetchPromises;
 				if (route.ids) {
 					fetchPromises = route.ids.map(id => {
-						const fetchUrl = `${route.url}/${id}`;
+						const fetchUrl = `${route.path}/${id}`;
 						return makeRequest({
 							url: fetchUrl,
 							headers: route.headers
@@ -39,18 +44,26 @@ async function doConsume (appConfig) {
 					});
 				} else {
 					fetchPromises = [
-						makeRequest({ url: route.url, headers: route.headers })
+						makeRequest({
+							url: route.url,
+							headers: route.headers
+						})
 					];
 				}
 				const subroutes = await Promise.all(fetchPromises);
-				ac[route.path] =
-					subroutes.length > 1
-						? subroutes.map(sr => JSON.parse(sr))
-						: JSON.parse(subroutes[0]);
+				if (subroutes) {
+					ac[route.path] =
+						subroutes.length > 1
+							? subroutes
+							: subroutes[0];
+				}
 				return ac;
 			},
 			{}
 		);
+		if (!Object.keys(dataToWrite)) {
+			throw new Error('Nothing to write!');
+		}
 		const outFolder = join(appDirectory, 'mockdata');
 		if (!fs.existsSync(outFolder)) {
 			fs.mkdir(outFolder);
@@ -59,11 +72,10 @@ async function doConsume (appConfig) {
 			JSON.stringify(dataToWrite),
 			{ encoding: 'utf8' }
 		);
-		console.log(`\n${green('Successfully Wrote mock data')}`);
+		success('Successfully Wrote mock data');
 		process.exit(0);
 	} catch (err) {
-		console.log(red(err.message));
-		process.exit(1);
+		error(err.message);
 	}
 }
-doConsume(getInputParams());
+doConsume();
