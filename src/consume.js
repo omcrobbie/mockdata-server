@@ -6,6 +6,7 @@ const { getConfig, error, success } = require('./helpers');
 const { appDirectory } = require('./paths');
 const express = require('express');
 const agent = require('supertest');
+const { isEmpty } = require('lodash');
 
 const { routes, apiRouter, apiBase, middleware = [] } = getConfig('routes', 'apiRouter', 'apiBase', 'middleware');
 const expressApp = express().use(apiBase, [...middleware, apiRouter]);
@@ -22,7 +23,8 @@ function makeRequest ({ route, id = null }) {
 			.end((err, res) => {
 				const msg = `Fetch from ${urlPath}`;
 				if (!err && res.status === 200) {
-					console.log(`${msg}: ${green('SUCCESS')}`);
+					const noData = isEmpty(res.body);
+					console.log(`${msg}: ${green('SUCCESS')} ${red(noData ? '(No data)' : '')}`);
 					let payload = res.body;
 					resolve(payload);
 				} else {
