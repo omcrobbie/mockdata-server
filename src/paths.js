@@ -7,7 +7,8 @@ const appDirectory = fs.realpathSync(process.cwd());
 module.exports = {
 	appDirectory,
 	inputPath: resolveApp('mockdata.config.js'),
-	outputPath: resolveApp('mockdata/data.json', true)
+	outputPath: resolveApp('mockdata', true),
+	outputData: resolveApp('mockdata/data.json', true)
 };
 
 function resolveApp (relativePath, noError = false) {

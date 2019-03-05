@@ -3,7 +3,7 @@ const { join } = require('path');
 const Promise = require('bluebird');
 const { red, green } = require('chalk');
 const { getConfig, error, success } = require('./helpers');
-const { outputPath, appDirectory } = require('./paths');
+const { appDirectory } = require('./paths');
 const express = require('express');
 const agent = require('supertest');
 
@@ -24,9 +24,6 @@ function makeRequest ({ route, id = null }) {
 				if (!err && res.status === 200) {
 					console.log(`${msg}: ${green('SUCCESS')}`);
 					let payload = res.body;
-					if (route.addId) {
-						payload = { id, _data: res.body };
-					}
 					resolve(payload);
 				} else {
 					console.log(`${msg}: ${red('FAILED')}`);
@@ -41,9 +38,7 @@ async function doConsume () {
 			routes,
 			async (ac, route) => {
 				let fetchPromises;
-				let multiple = false;
 				if (route.ids) {
-					multiple = true;
 					fetchPromises = route.ids.map(id => {
 						return makeRequest({ route, id }, true);
 					});
@@ -51,11 +46,15 @@ async function doConsume () {
 					fetchPromises = [makeRequest({ route })];
 				}
 				let subroutes = await Promise.all(fetchPromises);
-				if (multiple) {
-					subroutes = [subroutes];
-				}
 				if (subroutes) {
-					ac[route.path] = subroutes.length > 1 ? subroutes : subroutes[0];
+					if (!route.ids) {
+						ac[route.path] = subroutes[0];
+					} else {
+						ac[route.path] = route.ids.reduce((acc, id) => {
+							acc[id] = subroutes[0];
+							return acc;
+						}, {});
+					}
 				}
 				return ac;
 			},
@@ -68,11 +67,12 @@ async function doConsume () {
 		if (!fs.existsSync(outFolder)) {
 			fs.mkdir(outFolder);
 		}
+		const outputPath = join(outFolder, 'data.json');
 		fs.writeFileSync(outputPath,
 			JSON.stringify(dataToWrite),
 			{ encoding: 'utf8' }
 		);
-		success('Successfully Wrote mock data');
+		success('Successfully wrote mock data');
 		process.exit(0);
 	} catch (err) {
 		error(err.message);
