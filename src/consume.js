@@ -10,17 +10,24 @@ const agent = require('supertest');
 const { routes, apiRouter, apiBase, middleware = [] } = getConfig('routes', 'apiRouter', 'apiBase', 'middleware');
 const expressApp = express().use(apiBase, [...middleware, apiRouter]);
 
-function makeRequest ({ url, headers }) {
-	const urlPath = `${apiBase}/${url}`;
+function makeRequest ({ route, id = null }) {
+	let urlPath = `${apiBase}/${route.url}`;
+	if (id) {
+		urlPath = `${urlPath}/${id}`;
+	}
 	return new Promise((resolve, reject) => {
 		agent(expressApp)
 			.get(urlPath)
-			.set(headers)
+			.set(route.headers || {})
 			.end((err, res) => {
 				const msg = `Fetch from ${urlPath}`;
 				if (!err && res.status === 200) {
 					console.log(`${msg}: ${green('SUCCESS')}`);
-					resolve(res.body);
+					let payload = res.body;
+					if (route.addId) {
+						payload = { id, _data: res.body };
+					}
+					resolve(payload);
 				} else {
 					console.log(`${msg}: ${red('FAILED')}`);
 					reject(new Error(`Could not find path: ${urlPath}`));
@@ -34,28 +41,21 @@ async function doConsume () {
 			routes,
 			async (ac, route) => {
 				let fetchPromises;
+				let multiple = false;
 				if (route.ids) {
+					multiple = true;
 					fetchPromises = route.ids.map(id => {
-						const fetchUrl = `${route.path}/${id}`;
-						return makeRequest({
-							url: fetchUrl,
-							headers: route.headers
-						});
+						return makeRequest({ route, id }, true);
 					});
 				} else {
-					fetchPromises = [
-						makeRequest({
-							url: route.url,
-							headers: route.headers
-						})
-					];
+					fetchPromises = [makeRequest({ route })];
 				}
-				const subroutes = await Promise.all(fetchPromises);
+				let subroutes = await Promise.all(fetchPromises);
+				if (multiple) {
+					subroutes = [subroutes];
+				}
 				if (subroutes) {
-					ac[route.path] =
-						subroutes.length > 1
-							? subroutes
-							: subroutes[0];
+					ac[route.path] = subroutes.length > 1 ? subroutes : subroutes[0];
 				}
 				return ac;
 			},
